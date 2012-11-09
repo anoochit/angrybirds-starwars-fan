@@ -1,11 +1,8 @@
 package net.redlinesoft.app.angrybirdstarwarsfan;
 
 import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
@@ -23,10 +20,10 @@ import org.w3c.dom.NodeList;
 import com.google.ads.*;
 
 import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -34,16 +31,11 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.support.v4.widget.SimpleCursorAdapter;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.AdapterView.OnItemClickListener;
@@ -52,6 +44,7 @@ public class MainActivity extends Activity {
 
 	private AdView adView;
 	public static final int DIALOG_DOWNLOAD_PROGRESS = 0;
+	public static int DOWNLOAD_COMPLETE = 0;
 	private ProgressDialog mProgressDialog;
 	String feedurl = "http://query.yahooapis.com/v1/public/yql?q=select%20title%2Clink%20from%20feed%20where%20url%3D%22https%3A%2F%2Fgdata.youtube.com%2Ffeeds%2Fapi%2Fplaylists%2FTR8zrKWyBqj5q-EbL8h_NDJWgd08wAHP%3Fv%3D2%22%20and%20link.rel%3D%22alternate%22";
 
@@ -60,7 +53,7 @@ public class MainActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
-		 
+ 
 		// load admob
 		// Create the adView
 		adView = new AdView(this, AdSize.BANNER, "a1509bbf73521a9");
@@ -77,8 +70,7 @@ public class MainActivity extends Activity {
 		myDb.getWritableDatabase();
 		// check data exist ?
 		checkItemExist();
-
-		myDb.close();
+		//myDb.close();
 
 	}
 
@@ -96,7 +88,10 @@ public class MainActivity extends Activity {
 				public void onClick(DialogInterface dialog, int arg1) {
 					Log.d("DB", "update episode data from internet");
 					// load episode data and items form internet
-					startDownload();
+					startDownload();					
+					while(DOWNLOAD_COMPLETE!=1){
+						Log.d("DOWNLOAD", "Waiting download file");
+					} 					
 					parseContent();
 					loadContent();
 				}
@@ -105,7 +100,7 @@ public class MainActivity extends Activity {
 		} else {
 			loadContent();
 		}
-		myDb.close();
+		//myDb.close();
 	}
 
 	private void loadContent() {
@@ -137,7 +132,7 @@ public class MainActivity extends Activity {
 			}
 		});
 
-		myDb.close();
+		//myDb.close();
 
 	}
 
@@ -166,15 +161,16 @@ public class MainActivity extends Activity {
 				// String fileName = URLDownload.substring(
 				// URLDownload.lastIndexOf('/')+1, URLDownload.length() );
 
-				OutputStream output = new FileOutputStream(Environment
-						.getExternalStorageDirectory().getPath()
-						+ "/abswplaylist.xml");
+				//OutputStream output = new FileOutputStream(Environment.getExternalStorageDirectory().getPath()+ "/abswplaylist.xml");
+				OutputStream output = new FileOutputStream(getExternalFilesDir(null).getAbsolutePath().toString() + "/" + "abswplaylist.xml");
 
-				Log.d("FILE", Environment.getExternalStorageDirectory().getPath() + "/abswplaylist.xml");
+				Log.d("FILE", getExternalFilesDir(null).getAbsolutePath().toString() + "/" + "abswplaylist.xml");
 
 				byte data[] = new byte[1024];
 
 				long total = 0;
+				
+				MainActivity.DOWNLOAD_COMPLETE=0;
 
 				while ((count = input.read(data)) != -1) {
 					total += count;
@@ -185,7 +181,9 @@ public class MainActivity extends Activity {
 				output.flush();
 				output.close();
 				input.close();
-
+				
+				MainActivity.DOWNLOAD_COMPLETE=1;
+				
 			} catch (Exception e) {
 				Log.d("DOWNLOAD", "Error download file");
 			}
@@ -195,7 +193,7 @@ public class MainActivity extends Activity {
 		}
 
 		protected void onProgressUpdate(String... progress) {
-			// Log.d("DOWNLOAD", progress[0]);
+			Log.d("DOWNLOAD", progress[0]);
 			mProgressDialog.setProgress(Integer.parseInt(progress[0]));
 		}
 
@@ -233,8 +231,8 @@ public class MainActivity extends Activity {
 		final DatabaseHandler myDb = new DatabaseHandler(this);
 		try {
 
-			File fXmlFile = new File(Environment.getExternalStorageDirectory()
-					.getPath() + "/abswplaylist.xml");
+			//File fXmlFile = new File(Environment.getExternalStorageDirectory().getPath() + "/abswplaylist.xml");
+			File fXmlFile = new File(getExternalFilesDir(null).getAbsolutePath().toString() + "/" + "abswplaylist.xml");
 			DocumentBuilderFactory dbFactory = DocumentBuilderFactory
 					.newInstance();
 			DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
@@ -268,32 +266,18 @@ public class MainActivity extends Activity {
 				myDb.InsertItem((temp + 1), strTitle, vedioID[1], strLink);
 
 			}
-			myDb.close();
-
+			//myDb.close();
 		} catch (Exception e) {
-
 			Log.d("XML", e.getMessage());
 		}
 
 	}
 
 	public boolean checkNetworkStatus() {
-		final ConnectivityManager connMgr = (ConnectivityManager) this
-				.getSystemService(Context.CONNECTIVITY_SERVICE);
-		final android.net.NetworkInfo wifi = connMgr
-				.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-		final android.net.NetworkInfo mobile = connMgr
-				.getNetworkInfo(ConnectivityManager.TYPE_MOBILE);
-		if (wifi.isAvailable()) {
-			Log.d("Network", "Connect via Wifi");
-			return true;
-		} else if (mobile.isAvailable()) {
-			Log.d("Network", "Connect via Mobile network");
-			return true;
-		} else {
-			Log.d("Network", "No network connection");
-			return false;
-		}
+		ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+		NetworkInfo activeNetworkInfo = connectivityManager
+				.getActiveNetworkInfo();
+		return activeNetworkInfo != null;
 	}
 	
 	@Override
@@ -349,13 +333,13 @@ public class MainActivity extends Activity {
 					});
 			adb.setNegativeButton("No", null);
 			adb.show();
-			myDb.close();
+			//myDb.close();
 			break;
 		}
 		return false;
 		
 	}
-
+ 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		getMenuInflater().inflate(R.menu.activity_main, menu);
